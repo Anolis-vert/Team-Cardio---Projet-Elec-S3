@@ -31,7 +31,7 @@ Cordialement.
 #define JAUNE 10    //LED jaune
 #define VERT 11     //LED verte
 #define ROUGE 12    //LED rouge
-#define BUZZER 3    //Buzzer
+#define BUZZER 5    //Buzzer
 #define BOUTTON 2   //Boutton
 #define CLKRTC 6    //Broche Clock du module RTC DS1302
 #define DATARTC 7   //Broche Data du module RTC DS1302
@@ -65,89 +65,7 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C display2(U8G2_R0, U8X8_PIN_NONE);   //Ecran 
 
 long int prev_time = millis();  //Moment de démarrage (utilisé dans la gestion de ind)
 short ind = 0;                  //Indice (utilisé dans la gestion des timing)
-
-
-//--------------------------------------------------------------------------------------------------------------------------------------------
-
-
-/*Setup()*/
-
-void setup() {
-  //On démarre la communication à 115000
-  Serial.begin(115200);
-
-  //On enregistre les adresses I2C des écrans
-  display1.setI2CAddress(0x3C << 1); //Ecran 1 : 0x3C (la résistance n'a pas été modifiée)
-  display2.setI2CAddress(0x3D << 1); //Ecran 2 : 0x3D (la résistance a été déplacée et ressoudée)
-
-  //Initialisation des écrans
-  display1.begin();
-  display2.begin();
-
-  //Défini la police d'écriture des textes
-  display1.setFont(u8g2_font_ncenB14_tr); //Grande
-  display2.setFont(u8g2_font_6x10_tf); //Petite
-
-  //Couleur du texte
-  display1.setFontMode(1);
-  display2.setFontMode(1);
-
-  //Initialisation des pins de sotie et mise sur LOW (éteint)
-  pinMode(JAUNE, OUTPUT);
-  pinMode(VERT, OUTPUT);
-  pinMode(ROUGE, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-  pinMode(CLKRTC, OUTPUT);
-  pinMode(RSTRTC, OUTPUT);
-  digitalWrite(JAUNE, LOW);
-  digitalWrite(VERT, LOW);
-  digitalWrite(ROUGE, LOW);
-  digitalWrite(BUZZER, LOW);
-  digitalWrite(CLKRTC, LOW);
-  digitalWrite(RSTRTC, LOW);
-
-  //Reprise du module RTC
-  if(litReg(SECRTC) & 0x80){   //Si le bit 7 des secondes est à 1, l'horloge était arrêtée.
-    setheure();                 //On met l'heure sur l'heure de compilation
-  }
-}
-
-
-//--------------------------------------------------------------------------------------------------------------------------------------------
-
-
-/*Affichage des écrans*/
-
-//Ecran 1
-void drawScreen1(U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display, short ind){
-  display.firstPage();
-  do{
-    display.setDrawColor(1);
-    display.drawLine(10,SCREEN_HEIGHT/2, SCREEN_WIDTH-10, SCREEN_HEIGHT/2);
-    display.setCursor(SCREEN_WIDTH/2-26, 3*SCREEN_HEIGHT/8);
-
-    afficheHeure(ind, display);
-    if(ind%2 == 0){
-      drawHeart(SCREEN_WIDTH/4, 9*SCREEN_HEIGHT/16, display);
-    }
-    display.setCursor(SCREEN_WIDTH/2, 13*SCREEN_HEIGHT/16);
-    display.print("096");
-  } while (display.nextPage());
-}
-
-//Ecran 2 : graphique
-void drawScreen2(U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display){
-  display.firstPage();
-  do {
-    display.drawLine(2, SCREEN_HEIGHT-2, SCREEN_WIDTH-10, SCREEN_HEIGHT-2);
-    display.drawLine(2, 10, 2, SCREEN_HEIGHT-2);
-    display.drawTriangle(SCREEN_WIDTH-10, SCREEN_HEIGHT-4, SCREEN_WIDTH-10, SCREEN_HEIGHT-1,SCREEN_WIDTH-7, SCREEN_HEIGHT-2);
-    display.setCursor(1,7);
-    display.print("A");
-    display.setCursor(SCREEN_WIDTH-6, SCREEN_HEIGHT-1);
-    display.print("s");
-  } while (display.nextPage());
-}
+float bpm = 0;
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
@@ -266,19 +184,19 @@ void afficheHeure(short ind, U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display){
 
   //Affichage des heures
   if (h < 10) {
-    display.print('0');
+    display.print("0");
   }        
   display.print(h);
 
   //Affichage du ':' clignotant
-  if(ind == 1){
+  if(ind%2 == 1){
     display.setDrawColor(0);
   }
   display.print(":");
   display.setDrawColor(1);
 
   if (m < 10){
-    display.print('0');
+    display.print("0");
   }
   display.print(m);
 }
@@ -305,47 +223,153 @@ void drawHeart(int x, int y, U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display){
 //--------------------------------------------------------------------------------------------------------------------------------------------
 
 
-/* Affichage des LEDs*/
+/* Gestion de l'affichage des battements cardiaques*/
 
-void allumeLeds(){
-  if(ind%8 == 0){ 
-    digitalWrite(ROUGE, LOW);
-    digitalWrite(VERT, LOW);
-    digitalWrite(JAUNE, LOW);
-  }
-  else if(ind%8 == 2){
-    digitalWrite(ROUGE, HIGH);
-    digitalWrite(VERT, LOW);
-    digitalWrite(JAUNE, LOW);
-  }
-  else if(ind%8 == 4){
+//Allumage des LEDS et du buzzer
+void allumeLeds(float bpm, bool chmtInd){
+  //Rythme entre 60 et 100 => Normal => LED verte allumée et buzzer à 1500Hz
+  if(bpm >60.0 && bpm < 100.0){ 
     digitalWrite(ROUGE, LOW);
     digitalWrite(VERT, HIGH);
     digitalWrite(JAUNE, LOW);
+    if(chmtInd){
+      tone(BUZZER, 1500, 100);
+    }   
   }
-  else if(ind%8 == 6){
+  //Rythme entre 40 et 60 => Bas => LED jaune allumée et buzzer à 500Hz
+  else if(bpm >40.0 && bpm < 60.0){
     digitalWrite(ROUGE, LOW);
     digitalWrite(VERT, LOW);
     digitalWrite(JAUNE, HIGH);
+    if(chmtInd){
+      tone(BUZZER, 500, 100);
+    } 
   }
-  else{}
+  //Rythme entre 100 et 140 => Haut => LED rouge allumée et buzzer à 2500Hz
+  else if(bpm >100.0 && bpm < 140.0){
+    digitalWrite(ROUGE, HIGH);
+    digitalWrite(VERT, LOW);
+    digitalWrite(JAUNE, LOW);
+    if(chmtInd){
+      tone(BUZZER, 2500, 100);
+    } 
+  }
+  //Rythme inférieur à 40 ou supérieur à 140 => Valeurs abberantes => aucune LED allumée et buzzer éteint
+  else{
+    digitalWrite(ROUGE, LOW);
+    digitalWrite(VERT, LOW);
+    digitalWrite(JAUNE, LOW);
+  }
 }
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
 
 
-/*loop()*/
+/*Affichage des écrans*/
 
+//Ecran 1
+void drawScreen1(U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display, short ind, float bpm){
+  display.firstPage();
+  do{
+    display.setDrawColor(1);
+    display.drawLine(10,SCREEN_HEIGHT/2, SCREEN_WIDTH-10, SCREEN_HEIGHT/2);
+    display.setCursor(SCREEN_WIDTH/2-26, 3*SCREEN_HEIGHT/8);
+
+    afficheHeure(ind, display);
+    if(ind%2 == 0){
+      drawHeart(SCREEN_WIDTH/4, 9*SCREEN_HEIGHT/16, display);
+    }
+    display.setCursor(SCREEN_WIDTH/2, 13*SCREEN_HEIGHT/16);
+    if(bpm > 140 || bpm < 40){
+      display.print("---");
+    }
+    else if(bpm<100){
+      display.print("0");
+      display.print(static_cast<int>(bpm));
+    }
+    else{
+      display.print(static_cast<int>(bpm));
+    }
+  } while (display.nextPage());
+}
+
+//Ecran 2 : graphique
+void drawScreen2(U8G2_SSD1306_128X64_NONAME_1_HW_I2C &display){
+  display.firstPage();
+  do {
+    display.drawLine(2, SCREEN_HEIGHT-2, SCREEN_WIDTH-10, SCREEN_HEIGHT-2);
+    display.drawLine(2, 10, 2, SCREEN_HEIGHT-2);
+    display.drawTriangle(SCREEN_WIDTH-10, SCREEN_HEIGHT-4, SCREEN_WIDTH-10, SCREEN_HEIGHT-1,SCREEN_WIDTH-7, SCREEN_HEIGHT-2);
+    display.setCursor(1,7);
+    display.print("A");
+    display.setCursor(SCREEN_WIDTH-6, SCREEN_HEIGHT-1);
+    display.print("s");
+  } while (display.nextPage());
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------------------------
+
+
+/*Setup et loop*/
+
+//Setup()
+void setup() {
+  //On démarre la communication à 115000
+  Serial.begin(115200);
+
+  //On enregistre les adresses I2C des écrans
+  display1.setI2CAddress(0x3C << 1); //Ecran 1 : 0x3C (la résistance n'a pas été modifiée)
+  display2.setI2CAddress(0x3D << 1); //Ecran 2 : 0x3D (la résistance a été déplacée et ressoudée)
+
+  //Initialisation des écrans
+  display1.begin();
+  display2.begin();
+
+  //Défini la police d'écriture des textes
+  display1.setFont(u8g2_font_ncenB14_tr); //Grande
+  display2.setFont(u8g2_font_6x10_tf); //Petite
+
+  //Couleur du texte
+  display1.setFontMode(1);
+  display2.setFontMode(1);
+
+  //Initialisation des pins de sotie et mise sur LOW (éteint)
+  pinMode(JAUNE, OUTPUT);
+  pinMode(VERT, OUTPUT);
+  pinMode(ROUGE, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+  pinMode(CLKRTC, OUTPUT);
+  pinMode(RSTRTC, OUTPUT);
+  digitalWrite(JAUNE, LOW);
+  digitalWrite(VERT, LOW);
+  digitalWrite(ROUGE, LOW);
+  digitalWrite(BUZZER, LOW);
+  digitalWrite(CLKRTC, LOW);
+  digitalWrite(RSTRTC, LOW);
+
+  //Reprise du module RTC
+  if(litReg(SECRTC) & 0x80){   //Si le bit 7 des secondes est à 1, l'horloge était arrêtée.
+    setheure();                //On met l'heure sur l'heure de compilation
+  }
+}
+
+
+//loop
 void loop() {
   long int tmp_retenu = millis();
+  bool chmtInd = false;
+  if (bpm<200){
+    bpm++;
+  }
+  else{bpm=0;};
   if(tmp_retenu-prev_time >= 500){
     ind = 1+ind;
     prev_time = tmp_retenu;
-    if(ind%2 == 0){digitalWrite(BUZZER, HIGH);}    
+    chmtInd = (ind%2 == 0);
   }
-  drawScreen1(display1, ind);
+  allumeLeds(bpm, chmtInd);
+  drawScreen1(display1, ind, bpm);
   drawScreen2(display2);
-  allumeLeds();
-  digitalWrite(BUZZER, LOW);
 }
