@@ -11,7 +11,7 @@ Nous avons donc du trouver une autre bibliothèque demandant moins de RAM afin d
 La bibliothèque que nous utiliseront est donc U8g2.
 
 Beaucoups de commentaires dans ce code ne seront pas utile à sa compréhension, ils sont là uniquement comme pense bête lors de la présentation orale du projet.
-Ils ne sont pas générés à l'IA, mais ne pouvant pas retenir l'intégralité des informations trouvées et utilisées pour ce projet, je préfère commenter afin de ne pas oublier lors de la démonstration.
+Ils ne sont pas générés à l'IA, mais ne pouvant pas retenir l'intégralité des informations trouvées et utilisées pour ce projet, nous préfèrons commenter afin de ne pas oublier lors de la démonstration.
 Je vous prie de ne pas en tenir vigueur lors de la correction de ce code.
 Merci beaucoup,
 Cordialement.
@@ -25,8 +25,11 @@ Cordialement.
 /*Définition des constantes*/
 
 // Taille des écrans Oled
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
+#define SCREEN_WIDTH 128    //Largeur
+#define SCREEN_HEIGHT 64    //Hauteur
+
+//Gestion du DS1302
+#define FORCERA0DS1302 1   //Remet (1) ou non (0) le DS1302 à l'heure de compilation
 
 //Définition des pins de l'arduino utilisés
 #define JAUNE 10        //LED jaune
@@ -105,7 +108,7 @@ struct save_t{                              //Structure des enregistrements
   int jour;
   int mois;
   int annee;
-}
+};
 
 
 
@@ -573,10 +576,10 @@ void setup() {
 
   //Attache d'interruptions aux pins concernés
   attachInterrupt(digitalPinToInterrupt(BOUTTON1), interuptBoutton, RISING);    //Boutton jaune (D2)
-  attachInterrupt(digitalPinToInterrupt(BOUTTON2), interuptSave, RISING);       //Boutton rouge (D3)
+  //attachInterrupt(digitalPinToInterrupt(BOUTTON2), interuptSave, RISING);       //Boutton rouge (D3)
 
   //Reprise du module RTC
-  if(litReg(SECRTC) & 0x80){   //Si le bit 7 des secondes est à 1, l'horloge était arrêtée.
+  if(FORCERA0DS1302 || litReg(SECRTC) & 0x80){   //Si le bit 7 des secondes est à 1, l'horloge était arrêtée.
     setheure();                //On met l'heure sur l'heure de compilation
   }
 
